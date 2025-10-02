@@ -3,17 +3,16 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
-public class TestadorSenhasFlexivel {
+public class TestadorSenhas {
     private static String senhaCadastrada = null;
-    private static File arquivoWordlist = null;
+    private static final String ARQUIVO_SENHAS = "rockyou.txt";
 
     public static void main(String[] args) {
         while (true) {
-            String[] opcoes = {"Cadastrar Senha", "Escolher Wordlist", "Testar Senha", "Sair"};
+            String[] opcoes = {"Cadastrar Senha", "Testar Senha", "Sair"};
             int escolha = JOptionPane.showOptionDialog(
                 null,
-                "Testador de Senhas - Escolha uma opção:\n" +
-                (arquivoWordlist != null ? "Wordlist atual: " + arquivoWordlist.getName() : "Nenhuma wordlist selecionada"),
+                "Testador de Senhas - Escolha uma opção:",
                 "Menu Principal",
                 JOptionPane.DEFAULT_OPTION,
                 JOptionPane.INFORMATION_MESSAGE,
@@ -27,13 +26,10 @@ public class TestadorSenhasFlexivel {
                     cadastrarSenha();
                     break;
                 case 1:
-                    escolherWordlist();
-                    break;
-                case 2:
                     testarSenha();
                     break;
-                case 3:
-                case -1:
+                case 2:
+                case -1: // Fechar a janela
                     JOptionPane.showMessageDialog(null, "Programa encerrado!");
                     System.exit(0);
                     break;
@@ -49,60 +45,125 @@ public class TestadorSenhasFlexivel {
             JOptionPane.QUESTION_MESSAGE
         );
 
-        if (senhaCadastrada == null) return;
+        if (senhaCadastrada == null) {
+            // Usuário cancelou
+            return;
+        }
 
         if (senhaCadastrada.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(null, "Senha não pode estar vazia!", "Erro", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                null,
+                "Senha não pode estar vazia!",
+                "Erro",
+                JOptionPane.ERROR_MESSAGE
+            );
             senhaCadastrada = null;
         } else {
-            JOptionPane.showMessageDialog(null, "Senha cadastrada com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(
+                null,
+                "Senha cadastrada com sucesso!",
+                "Sucesso",
+                JOptionPane.INFORMATION_MESSAGE
+            );
         }
     }
 
-    private static void escolherWordlist() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Escolha o arquivo de wordlist");
-        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-        
-        // Filtro para arquivos de texto
-        fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
-            public boolean accept(File f) {
-                return f.isDirectory() || 
-                       f.getName().toLowerCase().endsWith(".txt") ||
-                       f.getName().toLowerCase().endsWith(".lst") ||
-                       f.getName().toLowerCase().endsWith(".wordlist");
-            }
-            
-            public String getDescription() {
-                return "Arquivos de Wordlist (*.txt, *.lst, *.wordlist)";
-            }
-        });
+    private static void testarSenha() {
+        if (senhaCadastrada == null) {
+            JOptionPane.showMessageDialog(
+                null,
+                "Nenhuma senha cadastrada! Por favor, cadastre uma senha primeiro.",
+                "Aviso",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
 
-        int result = fileChooser.showOpenDialog(null);
-        
-        if (result == JFileChooser.APPROVE_OPTION) {
-            arquivoWordlist = fileChooser.getSelectedFile();
+        // Verificar se o arquivo rockyou.txt existe
+        if (!Files.exists(Paths.get(ARQUIVO_SENHAS))) {
+            JOptionPane.showMessageDialog(
+                null,
+                "Arquivo " + ARQUIVO_SENHAS + " não encontrado!\n" +
+                "Por favor, coloque o arquivo rockyou.txt na mesma pasta do programa.",
+                "Erro",
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        // Mostrar diálogo de progresso
+        JOptionPane.showMessageDialog(
+            null,
+            "Iniciando teste de senha...\nIsso pode demorar alguns minutos.",
+            "Testando Senha",
+            JOptionPane.INFORMATION_MESSAGE
+        );
+
+        try {
+            String resultado = buscarSenhaNoArquivo();
+            JOptionPane.showMessageDialog(
+                null,
+                resultado,
+                "Resultado do Teste",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(
+                null,
+                "Erro ao ler o arquivo: " + e.getMessage(),
+                "Erro",
+                JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private static String buscarSenhaNoArquivo() throws IOException {
+        int linhaAtual = 0;
+        int senhasEncontradas = 0;
+        List<String> senhasIguais = new ArrayList<>();
+
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(ARQUIVO_SENHAS))) {
+            String linha;
             
-            // Verificar se o arquivo existe e é legível
-            if (!arquivoWordlist.exists() || !arquivoWordlist.canRead()) {
-                JOptionPane.showMessageDialog(null, 
-                    "Não foi possível ler o arquivo selecionado!", 
-                    "Erro", JOptionPane.ERROR_MESSAGE);
-                arquivoWordlist = null;
-            } else {
-                // Mostrar informações básicas do arquivo
-                long tamanho = arquivoWordlist.length();
-                String tamanhoFormatado = formatarTamanho(tamanho);
+            while ((linha = reader.readLine()) != null) {
+                linhaAtual++;
                 
-                JOptionPane.showMessageDialog(null, 
-                    "Wordlist selecionada com sucesso!\n" +
-                    "Arquivo: " + arquivoWordlist.getName() + "\n" +
-                    "Tamanho: " + tamanhoFormatado + "\n" +
-                    "Local: " + arquivoWordlist.getParent(),
-                    "Wordlist Carregada", 
-                    JOptionPane.INFORMATION_MESSAGE);
+                // Verificar se a linha não está vazia e é igual à senha cadastrada
+                if (!linha.trim().isEmpty() && linha.equals(senhaCadastrada)) {
+                    senhasIguais.add("Linha " + linhaAtual + ": " + linha);
+                    senhasEncontradas++;
+                }
+                
+                // Mostrar progresso a cada 100.000 linhas
+                if (linhaAtual % 100000 == 0) {
+                    System.out.println("Processadas " + linhaAtual + " linhas...");
+                }
             }
         }
-    }
 
-    private static String formatarTaman
+        // Construir o resultado
+        StringBuilder resultado = new StringBuilder();
+        resultado.append("Senha testada: ").append(senhaCadastrada).append("\n");
+        resultado.append("Total de linhas processadas: ").append(linhaAtual).append("\n");
+        resultado.append("Ocorrências encontradas: ").append(senhasEncontradas).append("\n\n");
+
+        if (senhasEncontradas > 0) {
+            resultado.append("A SENHA FOI ENCONTRADA NO ARQUIVO!\n");
+            resultado.append("Isso significa que é uma senha fraca/comum.\n\n");
+            resultado.append("Ocorrências encontradas:\n");
+            for (String ocorrencia : senhasIguais) {
+                resultado.append(ocorrencia).append("\n");
+            }
+            
+            resultado.append("\nRECOMENDAÇÃO: Troque esta senha por uma mais segura!");
+        } else {
+            resultado.append("Senha não encontrada no arquivo rockyou.txt.\n");
+            resultado.append("Isso é um bom sinal, mas verifique outros aspectos de segurança:\n");
+            resultado.append("- Use pelo menos 12 caracteres\n");
+            resultado.append("- Combine letras maiúsculas, minúsculas, números e símbolos\n");
+            resultado.append("- Evite palavras comuns ou informações pessoais");
+        }
+
+        return resultado.toString();
+    }
+}
